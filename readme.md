@@ -1,26 +1,13 @@
-# Chat with RabbitMQ
+# Ring over Network
 
-## How to use the chat
+A small ring network simulator over a (more simulated) physical network.
 
-A few tools are provided to help compiling, cleaning and program running.
+## Compile the project
 
-You can compile the project with ./compile.sh and clean the classes with ./clean.sh
-Pease use ./run\_client.sh (and its counterpart run\_server) to run the programs.
+Use the ./compile.sh script to compile the application.
 
-You can launch as many clients as you want, and you can run between 0 and 1 server. The server is not mandatory if you don't plan to use the enhanced features.
-Please note that running the server after the clients tried to execute commands will process all of the outputs in order.
+## Run the project
 
-## Included commands
-### Chat client
+A few topologies are provided on the data folder. You can use them to test the application.
 
-/history [nbMessages] - Gets the last nbMessages sent
-/history all - Gets all the messages sent since the beginning
-/users - Returns the list of logged in users
-/close - Closes the client (accessible even if the back-end isn't running)
-
-### Chat Server
-
-/say [message] - Broadcasts message to all clients
-/kick [user] [reason] - Kicks the user with a reason
-/kickall [reason] - Kicks all users with a reason
-/close - Kicks all users and closes the server
+A script that runs the full project will be provided soon. For now, please run the command lines in run_node and adapt them to change the configuration file and/or the physical id for the node you are launching.
