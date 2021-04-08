@@ -25,6 +25,11 @@ public class Node {
     static boolean hang;
     static int token;
     static int fromOrigin;
+
+    // Variables for the ring operation
+    static String leftRoute[];
+    static String rightRoute[];
+
     public static void main(String[] args) {
         if (args.length != 3) {
             System.out.println("Please provide the network configuration, the physical id of this node as well as the RabbitMQ server address to join in order to start the program.");
@@ -34,7 +39,7 @@ public class Node {
 
         // Define the ids
         physicalId = Integer.parseInt(args[1]);
-        virtualId = -1;
+        virtualId = Integer.parseInt(args[1]);
 
         System.out.println("HELLO, MY PHYSICAL ID IS "+Integer.toString(physicalId));
 
@@ -107,37 +112,7 @@ public class Node {
 
                                     String[] broker = message.split(" ");
 
-                                    if (broker[0].equals("!RINGINITREQ")) {
-                                        // Received token from above
-                                        token = Integer.parseInt(broker[2]);
-                                        fromOrigin = Integer.parseInt(broker[1]);
-                                        // Set origin sender
-                                        for (Neighbor nei : neighbors) {
-                                            if (nei.remoteId == fromOrigin) {
-                                                nei.setInitSender(true);
-                                            }
-                                        }
-                                        // If not yet set, set it
-                                        if (virtualId == -1) {
-                                            token = token + 1;
-                                            virtualId = token;
-                                            System.out.println(physicalId+" got id "+virtualId+" on ring.");
-                                            ringInitNext();
-                                        }
-                                    } else if (broker[0].equals("!RINGINITCONF")) {
-                                        // Received confirmation that a neighbor has treated everything
-                                        token = Integer.parseInt(broker[2]);
-                                        for (Neighbor nei : neighbors) {
-                                            if (nei.remoteId == Integer.parseInt(broker[1])) {
-                                                nei.visited = true;
-                                            }
-                                        }
-                                        ringInitNext();
-                                        // Swap to next neighbor
-                                        System.out.println("Got reply from a neighbor that could initialize up to token "+token+". End of hang.");
-                                    } else {
-                                        System.out.println("Got something else: "+message);
-                                    }
+                                    
                                 };
                                 channel.basicConsume(fromOtherToUs, true, deliverCallback, consumerTag -> { });
                             }
@@ -149,27 +124,20 @@ public class Node {
                 }
             }
 
+            // Take node id on left (-1) and on right (+1)
+
+            // Djikstra fo find the routes (?)
+
             Scanner input = new Scanner(System.in);
             String cmd = "";
 
             while (!cmd.equals("/close")) {
                 cmd = input.nextLine();
 
-                if (cmd.equals("/create")) {
-                    // Creates the ring by sending commands to the other nodes
-                    // This node becomes the first one
-                    virtualId = 0;
-
-                    // No hanging on first iteration, send directly cmd to first neighbor
-                    hang = false;
-
-                    // We are node 0, send the token to next one (will take token + 1)
-                    token = 0;
-
-                    fromOrigin = -1;
-                    // No need to set origin sender on init
-
-                    ringInitNext();
+                if (cmd.equals("/sendleft")) {
+                    // Send to the left
+                } else if (cmd.equals("/sendright")) {
+                    // Send to the right
                 }
             }
 
@@ -177,11 +145,7 @@ public class Node {
 
             // Command handler will be there
 
-            /* create_ring -> Creates the ring from the current node, with the discovery method. Doesn't work if node has already a 
-            virtual id
-
-                destroy_ring -> Just send a destroy command that resets all the virtual ids to -1, with propagation to all neighbours
-
+            /*
                 send to left/right neighbour -> Only if part of a ring
 
             */
@@ -193,47 +157,5 @@ public class Node {
             System.exit(4);
         }
 
-    }
-
-    static void ringInitNext() {
-        // Send command to neighbors, be careful to wait for confirmation from the neighbor before proceeding to next one
-        boolean allPass = true;
-
-        try {
-            for (Neighbor n : neighbors) {
-    
-                // Send command to neighbor if not yet visited AND not original sender
-                if (!n.visited && !n.initSender) {
-                    allPass = false;
-                    String queueName = Integer.toString(physicalId) + "to" + Integer.toString(n.remoteId);
-                    // !RINGINITREQ ORIGINAL_SENDER TOKEN_TO_USE
-                    channel.basicPublish("", queueName, null, ("!RINGINITREQ "+Integer.toString(physicalId)+" "+Integer.toString(token)).getBytes("UTF-8"));
-                    //hang = true;
-                    //n.setHangThere(true);
-                    System.out.println("Sent token to neighbor...");
-                    System.out.print("Hanging on neighbor "+Integer.toString(n.remoteId)+"... ");
-                    System.out.println("Proceed.");
-                    // Quit loop for now 
-                    break;
-                } else {
-                    System.out.println("Passing neighbor...");
-                }
-            }
-
-            // Over, send back to initial sender if exists (-1 means none) AND ALL PASSED (all got visited)
-            if (fromOrigin != -1 && allPass) {
-                // Send back the current token to initial sender
-                String queueName = Integer.toString(physicalId) + "to" + Integer.toString(fromOrigin);
-                channel.basicPublish("", queueName, null, ("!RINGINITCONF "+Integer.toString(physicalId)+" "+Integer.toString(token)).getBytes("UTF-8"));
-                System.out.println("Finished ring creation.");
-            }
-
-            System.out.println("Finished call.");
-        } catch (Exception e) {
-            System.err.println("Left while processing an initialization. Everything is ruined.");
-            System.err.println(e.getMessage());
-            System.err.println(e);
-            System.exit(10);
-        }
     }
 }
