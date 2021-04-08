@@ -2,6 +2,9 @@
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Scanner;
 
 import com.rabbitmq.client.Channel;
@@ -27,8 +30,47 @@ public class Node {
     static int fromOrigin;
 
     // Variables for the ring operation
-    static String leftRoute[];
-    static String rightRoute[];
+    static ArrayList<Integer> leftRoute; 
+    static ArrayList<Integer> rightRoute; 
+    static boolean pathGot;
+    static ArrayList<Integer> trace;
+
+    public static void pathToNeighbor(int[][] network, int s, int d) {
+        boolean[] visited = new boolean[network[0].length];
+        ArrayList<Integer> pathList = new ArrayList<Integer>();
+        pathList.add(s);
+        pathGot = false;
+
+        possiblePaths(s, d, visited, pathList, network);
+
+        pathGot = false;
+
+    }
+
+    private static void possiblePaths(int c, int d, boolean[] visited, ArrayList<Integer> localPaths, int[][] network) {
+        if (pathGot) {
+            return;
+        }
+
+        if (c == d) {
+            trace = new ArrayList<>(localPaths);
+            pathGot = true;
+            return;
+        }
+
+        visited[c] = true;
+
+        for(int j = 0; j < network[c].length; j++) {
+            if (network[c][j] == 1) {
+                // Adjacent
+                localPaths.add(j);
+                possiblePaths(j, d, visited, localPaths, network);
+                localPaths.remove(Integer.valueOf(j));
+            }
+        }
+
+        visited[c] = false;
+    }
 
     public static void main(String[] args) {
         if (args.length != 3) {
@@ -112,6 +154,9 @@ public class Node {
 
                                     String[] broker = message.split(" ");
 
+                                    if(broker[0].equals("!PHYSICALROUTE")) {
+                                        // Check what is the next node to send the message
+                                    }
                                     
                                 };
                                 channel.basicConsume(fromOtherToUs, true, deliverCallback, consumerTag -> { });
@@ -126,7 +171,19 @@ public class Node {
 
             // Take node id on left (-1) and on right (+1)
 
-            // Djikstra fo find the routes (?)
+            int leftNode = (physicalId == 0) ? i - 1 : physicalId - 1;
+
+            int rightNode = (physicalId == i-1) ? 0 : physicalId + 1;
+
+            System.out.println("left is "+leftNode+", right is "+rightNode);
+
+            pathToNeighbor(netTopology, physicalId, rightNode);
+            rightRoute = new ArrayList<>(trace);
+            System.out.println("Right route is "+rightRoute.toString());
+
+            pathToNeighbor(netTopology, physicalId, leftNode);
+            leftRoute = new ArrayList<>(trace);
+            System.out.println("Left route is "+leftRoute.toString());
 
             Scanner input = new Scanner(System.in);
             String cmd = "";
@@ -154,6 +211,9 @@ public class Node {
             System.exit(2);
         } catch (Exception e) {
             System.err.println("An error occured. This node will terminate.");
+            for (StackTraceElement string : e.getStackTrace()) {
+                System.err.println(string);
+            }
             System.exit(4);
         }
 
