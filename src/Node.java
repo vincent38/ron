@@ -1,12 +1,7 @@
 //Imports
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -24,6 +19,7 @@ public class Node {
     static int virtualId;
     static ArrayList<Neighbor> neighbors;
     static Channel channel;
+    static int netSize;
 
     // Variables for ring initialization
     static boolean hang;
@@ -36,41 +32,50 @@ public class Node {
     static boolean pathGot;
     static ArrayList<Integer> trace;
 
-    public static void pathToNeighbor(int[][] network, int s, int d) {
-        boolean[] visited = new boolean[network[0].length];
-        ArrayList<Integer> pathList = new ArrayList<Integer>();
-        pathList.add(s);
-        pathGot = false;
+    public static ArrayList<Integer> bfs(int src, int dest, int[][] network) {
+        Queue<Integer> queue = new ArrayDeque<>();
 
-        possiblePaths(s, d, visited, pathList, network);
+        int[] predList = new int[netSize];
+        int[] dist = new int[netSize];
+        boolean[] visited = new boolean[netSize];
 
-        pathGot = false;
-
-    }
-
-    private static void possiblePaths(int c, int d, boolean[] visited, ArrayList<Integer> localPaths, int[][] network) {
-        if (pathGot) {
-            return;
+        for (int i = 0; i < netSize; i++) {
+            dist[i] = 10000000;
+            visited[i] = false;
         }
 
-        if (c == d) {
-            trace = new ArrayList<>(localPaths);
-            pathGot = true;
-            return;
-        }
+        queue.add(src);
 
-        visited[c] = true;
+        visited[src] = true;
+        dist[src] = 0;
+        predList[src] = -1;
 
-        for(int j = 0; j < network[c].length; j++) {
-            if (network[c][j] == 1) {
-                // Adjacent
-                localPaths.add(j);
-                possiblePaths(j, d, visited, localPaths, network);
-                localPaths.remove(Integer.valueOf(j));
+        mainLoop:
+        while (!queue.isEmpty()) {
+            int s = queue.remove();
+            for (int i = 0; i < network[s].length; i++) {
+                if (network[s][i] == 1 && !visited[i]) {
+                    visited[i] = true;
+                    dist[i] = dist[s] + 1;
+                    predList[i] = s;
+                    queue.add(i);
+
+                    if (i == dest) {
+                        break mainLoop;
+                    }
+                }
             }
         }
 
-        visited[c] = false;
+        Deque<Integer> route = new LinkedList<>();
+        int trace = dest;
+        route.add(trace);
+
+        while (predList[trace] != -1) {
+            route.addFirst(predList[trace]);
+            trace = predList[trace];
+        }
+        return new ArrayList<>(route);
     }
 
     public static void main(String[] args) {
@@ -110,14 +115,13 @@ public class Node {
 
             Scanner netConf = new Scanner(new File(args[0]));
 
-            int i = netConf.nextInt();
-            int j = netConf.nextInt();
-            int[][] netTopology = new int[i][j];
-            System.out.println("Will read a "+Integer.toString(i)+" * "+Integer.toString(j)+" matrix from file.");
+            netSize = netConf.nextInt();
+            int[][] netTopology = new int[netSize][netSize];
+            System.out.println("Will read a " + netSize + " * " + netSize + " matrix from file.");
 
             while (netConf.hasNextLine()) {
-                for (int m = 0; m < i; m++) {
-                    for (int n = 0; n < j; n++) {
+                for (int m = 0; m < netSize; m++) {
+                    for (int n = 0; n < netSize; n++) {
                         try {
                             netTopology[m][n] = netConf.nextInt();
 
@@ -133,7 +137,7 @@ public class Node {
 
                                 Neighbor ne = new Neighbor(remoteNode, false);
                                 if (!neighbors.contains(ne)) {
-                                    System.out.println("Adding "+Integer.toString(remoteNode)+" to neighbors list.");
+                                    System.out.println("Adding "+ remoteNode +" to neighbors list.");
                                     neighbors.add(ne);
                                 }
 
@@ -201,21 +205,15 @@ public class Node {
                 }
             }
 
-            // Take node id on left (-1) and on right (+1)
 
-            int leftNode = (physicalId == 0) ? i - 1 : physicalId - 1;
+            int leftNode = (physicalId == 0) ? netSize - 1 : physicalId - 1;
 
-            int rightNode = (physicalId == i-1) ? 0 : physicalId + 1;
+            int rightNode = (physicalId == netSize-1) ? 0 : physicalId + 1;
 
-            System.out.println("left is "+leftNode+", right is "+rightNode);
+            System.out.println("left is " + leftNode + ", right is " + rightNode);
 
-            pathToNeighbor(netTopology, physicalId, rightNode);
-            rightRoute = new ArrayList<>(trace);
-            System.out.println("Right route is "+rightRoute.toString());
-
-            pathToNeighbor(netTopology, physicalId, leftNode);
-            leftRoute = new ArrayList<>(trace);
-            System.out.println("Left route is "+leftRoute.toString());
+            rightRoute = bfs(physicalId, rightNode, netTopology);
+            leftRoute = bfs(physicalId, leftNode, netTopology);;
 
             Scanner input = new Scanner(System.in);
             String cmd = "";
