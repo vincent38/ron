@@ -224,46 +224,62 @@ public class Node {
 
                 if (cmdBroker[0].equals("/sendleft")) {
                     // Send to the left
-                    /*
-                    int next = leftRoute[0];
+                    
+                    int next = leftRoute.get(1);
                     String msg = "!PHYSICALROUTE ";
-                    if (leftRoute.length == 1) {
+                    if (leftRoute.size() == 2) {
                         // Next is dest
                         msg += "NULL ";
                     } else {
                         // Next is router
-                        int[] newRoute = Arrays.copyOfRange(leftRoute, 1, leftRoute.length);
-                        msg += Arrays.stream(newRoute).mapToObj(String::valueOf).reduce((a, b) -> a.concat(",").concat(b)).get();
+                        for(int i = 0; i < leftRoute.size(); i++) {
+                            if (i != 0 && i!= 1) {
+                                msg += leftRoute.get(i).toString();
+                            }
+                            if (i>1 && i+1 != leftRoute.size()) {
+                                msg += ",";
+                            }
+                        }
                         msg += " ";
                     }
-                    msg += cmd.replace("/sendleft ", "")
+                    msg += cmd.replace("/sendleft ", "");
 
                     String routeTo = Integer.toString(physicalId) + "to" + next;
 
+                    System.out.println("Sending msg => "+msg+" on channel "+routeTo);
+
                     channel.basicPublish("", routeTo, null, msg.getBytes("UTF-8"));
-                    */
-                    channel.basicPublish("", "0to2", null, ("!PHYSICALROUTE 1,3 Hello_3_:D").getBytes("UTF-8"));
+                    
+                    //channel.basicPublish("", "0to2", null, ("!PHYSICALROUTE 1,3 Hello_3_:D").getBytes("UTF-8"));
                     
                 } else if (cmdBroker[0].equals("/sendright")) {
                     // Send to the right
-                    /*
-                    int next = rightRoute[0];
+                    
+                    int next = rightRoute.get(1);
                     String msg = "!PHYSICALROUTE ";
-                    if (rightRoute.length == 1) {
+                    if (rightRoute.size() == 2) {
                         // Next is dest
                         msg += "NULL ";
                     } else {
                         // Next is router
-                        int[] newRoute = Arrays.copyOfRange(rightRoute, 1, rightRoute.length);
-                        msg += Arrays.stream(newRoute).mapToObj(String::valueOf).reduce((a, b) -> a.concat(",").concat(b)).get();
+                        for(int i = 0; i < rightRoute.size(); i++) {
+                            if (i != 0 && i!= 1) {
+                                msg += rightRoute.get(i).toString();
+                            }
+                            if (i>1 && i+1 != rightRoute.size()) {
+                                msg += ",";
+                            }
+                        }
                         msg += " ";
                     }
-                    msg += cmd.replace("/sendright ", "")
+                    msg += cmd.replace("/sendright ", "");
 
                     String routeTo = Integer.toString(physicalId) + "to" + next;
 
+                    System.out.println("Sending msg => "+msg+" on channel "+routeTo);
+
                     channel.basicPublish("", routeTo, null, msg.getBytes("UTF-8"));
-                    */
+                    
                 }
             }
 
