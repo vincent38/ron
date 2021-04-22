@@ -17,7 +17,6 @@ public class Node {
     // Global variables for the node
     static int physicalId;
     static int virtualId;
-    static ArrayList<Neighbor> neighbors;
     static Channel channel;
     static int netSize;
 
@@ -29,10 +28,16 @@ public class Node {
     // Variables for the ring operation
     static ArrayList<Integer> leftRoute; 
     static ArrayList<Integer> rightRoute; 
+    static int[] lRoute;
+    static int[] rRoute;
     static boolean pathGot;
     static ArrayList<Integer> trace;
 
-    public static ArrayList<Integer> bfs(int src, int dest, int[][] network) {
+    private static ArrayList<Integer> bfs(int src, int dest, int[][] network) {
+        /**
+         * This function builds the shortest path between the source and the destination over a physical network
+         */
+
         Queue<Integer> queue = new ArrayDeque<>();
 
         int[] predList = new int[netSize];
@@ -78,7 +83,43 @@ public class Node {
         return new ArrayList<>(route);
     }
 
+    private static void buildSendMessage(int[] route, String content){
+        // Take next sender directly
+        int dest = route[0];
+        int[] newRoute = Arrays.copyOfRange(route, 1, route.length);
+
+        // Message will be sent to dest
+        String routeTo = Integer.toString(physicalId) + "to" + dest;
+
+        // First element of the message
+        String msg = "!PHYSICALROUTE ";
+                
+        // Second element of the message
+        if (newRoute.length == 0) {
+            // We were the last router
+            msg += "NULL";
+        } else {
+            // There is at least still one router
+            msg += Arrays.stream(newRoute).mapToObj(String::valueOf).reduce((a, b) -> a.concat(",").concat(b)).get();
+        }
+
+        // Third element of the message
+        msg += " "+content;
+
+        System.out.println("[TRACEROUTE] Routing message to "+dest);
+
+        try {
+            channel.basicPublish("", routeTo, null, msg.getBytes("UTF-8"));
+        } catch (Exception e) {
+            System.err.println("An error occured while trying to route a message. Node exiting...");
+            System.exit(-2);
+        }
+    }
+
     public static void main(String[] args) {
+        /**
+         * This is the main handler for the node
+         */
         if (args.length != 3) {
             System.out.println("Please provide the network configuration, the physical id of this node as well as the RabbitMQ server address to join in order to start the program.");
             System.out.println("Usage : node [network.conf] [node_physical_id]");
@@ -89,10 +130,7 @@ public class Node {
         physicalId = Integer.parseInt(args[1]);
         virtualId = Integer.parseInt(args[1]);
 
-        System.out.println("HELLO, MY PHYSICAL ID IS "+Integer.toString(physicalId));
-
-        // Define the neighbors list
-        neighbors = new ArrayList<Neighbor>();
+        System.out.println("[NETWORK] Hello world ! Physical ID: "+Integer.toString(physicalId)+" - Virtual ID: "+Integer.toString(virtualId));
 
         // Usual RabbitMQ setup
         String host = args[2];
@@ -117,7 +155,7 @@ public class Node {
 
             netSize = netConf.nextInt();
             int[][] netTopology = new int[netSize][netSize];
-            System.out.println("Will read a " + netSize + " * " + netSize + " matrix from file.");
+            System.out.println("[NETWORK] Will read a " + netSize + " * " + netSize + " matrix from file.");
 
             while (netConf.hasNextLine()) {
                 for (int m = 0; m < netSize; m++) {
@@ -127,7 +165,7 @@ public class Node {
 
                             if ((m == physicalId || n == physicalId) && netTopology[m][n] == 1 && m <= n) {
                                 // Can open two queues back and forth between our node and the remote one
-                                System.out.print("Can open a queue between our node and remote one with ids ");
+                                System.out.print("[NETWORK] Can open a queue between our node and remote one with ids ");
                                 System.out.print(m);
                                 System.out.print(" and ");
                                 System.out.println(n);
@@ -135,18 +173,9 @@ public class Node {
                                 // Determine remote and append to neighbors list
                                 int remoteNode = (m == physicalId ? n : m);
 
-                                Neighbor ne = new Neighbor(remoteNode, false);
-                                if (!neighbors.contains(ne)) {
-                                    System.out.println("Adding "+ remoteNode +" to neighbors list.");
-                                    neighbors.add(ne);
-                                }
-
                                 // Open from us to the other - WRITE
                                 String fromUsToOther = Integer.toString(physicalId) + "to" + Integer.toString(remoteNode);
                                 channel.queueDeclare(fromUsToOther, false, false, false, null);
-
-                                // Example
-                                //channel.basicPublish("", fromUsToOther, null, ("Hello from node "+Integer.toString(physicalId)).getBytes("UTF-8"));
 
                                 // Open from other to us - READ
                                 String fromOtherToUs = Integer.toString(remoteNode) + "to" + Integer.toString(physicalId) ;
@@ -155,7 +184,6 @@ public class Node {
                                 // Example 
                                 DeliverCallback deliverCallback = (consumerTag, delivery) -> {
                                     String message = new String(delivery.getBody(), "UTF-8");
-                                    //System.out.println(physicalId+" got message on queue "+fromOtherToUs+" -> "+message);
 
                                     String[] broker = message.split(" ");
 
@@ -163,32 +191,17 @@ public class Node {
                                         // Check what is the next node to send the message
 
                                         // Structure of command : cmd array,of,nodes message
+                                        String content = message.replaceFirst(broker[0]+" "+broker[1]+" ", "");
 
                                         if (broker[1].equals("NULL")) {
-                                            // Arrived at the end.
-                                            System.out.println("Received message : "+broker[2]);
+                                            // Arrived at the end. Clean the content to discard the original sender id
+                                            System.out.println("/!\\ Received message from node "+broker[2]+": "+content.replaceFirst(broker[2]+" ", ""));
                                         } else {
+                                            // Get the route, the next router, and the new route
                                             int[] route = Arrays.stream(broker[1].split(",")).map(String::trim).mapToInt(Integer::parseInt).toArray();
-                                            int next = route[0];
-                                            int[] newRoute = Arrays.copyOfRange(route, 1, route.length);
-
-                                            // Get channel name where we will send the packet
-                                            String routeTo = Integer.toString(physicalId) + "to" + next;
-                                            String msg = "!PHYSICALROUTE ";
                                             
-                                            if (route.length == 1) {
-                                                // We were the last router
-                                                msg += "NULL ";
-                                            } else {
-                                                // There is at least still one router
-                                                msg += Arrays.stream(newRoute).mapToObj(String::valueOf).reduce((a, b) -> a.concat(",").concat(b)).get();
-                                                msg += " ";
-                                            }
-                                            msg += broker[2];
-
-                                            System.out.println("Routing "+message+" to "+msg);
-
-                                            channel.basicPublish("", routeTo, null, msg.getBytes("UTF-8"));
+                                            // Hand over to the buildSend procedure
+                                            buildSendMessage(route, content);
                                         }
 
                                         
@@ -210,10 +223,16 @@ public class Node {
 
             int rightNode = (physicalId == netSize-1) ? 0 : physicalId + 1;
 
-            System.out.println("left is " + leftNode + ", right is " + rightNode);
+            System.out.println("[RING] Left ID is " + leftNode + ", Right ID is " + rightNode);
 
             rightRoute = bfs(physicalId, rightNode, netTopology);
-            leftRoute = bfs(physicalId, leftNode, netTopology);;
+            leftRoute = bfs(physicalId, leftNode, netTopology);
+
+            // Better for our message builder
+            rRoute = rightRoute.stream().mapToInt(Integer::intValue).toArray();
+            lRoute = leftRoute.stream().mapToInt(Integer::intValue).toArray();
+            rRoute = Arrays.copyOfRange(rRoute, 1, rRoute.length);
+            lRoute = Arrays.copyOfRange(lRoute, 1, lRoute.length);
 
             Scanner input = new Scanner(System.in);
             String cmd = "";
@@ -223,74 +242,18 @@ public class Node {
                 String[] cmdBroker = cmd.split(" ");
 
                 if (cmdBroker[0].equals("/sendleft")) {
-                    // Send to the left
-                    
-                    int next = leftRoute.get(1);
-                    String msg = "!PHYSICALROUTE ";
-                    if (leftRoute.size() == 2) {
-                        // Next is dest
-                        msg += "NULL ";
-                    } else {
-                        // Next is router
-                        for(int i = 0; i < leftRoute.size(); i++) {
-                            if (i != 0 && i!= 1) {
-                                msg += leftRoute.get(i).toString();
-                            }
-                            if (i>1 && i+1 != leftRoute.size()) {
-                                msg += ",";
-                            }
-                        }
-                        msg += " ";
-                    }
-                    msg += cmd.replace("/sendleft ", "");
-
-                    String routeTo = Integer.toString(physicalId) + "to" + next;
-
-                    System.out.println("Sending msg => "+msg+" on channel "+routeTo);
-
-                    channel.basicPublish("", routeTo, null, msg.getBytes("UTF-8"));
-                    
-                    //channel.basicPublish("", "0to2", null, ("!PHYSICALROUTE 1,3 Hello_3_:D").getBytes("UTF-8"));
-                    
+                    // Send to the left with buildSend
+                    buildSendMessage(lRoute, cmd.replaceFirst("/sendleft ", Integer.toString(virtualId)+" "));                    
                 } else if (cmdBroker[0].equals("/sendright")) {
-                    // Send to the right
-                    
-                    int next = rightRoute.get(1);
-                    String msg = "!PHYSICALROUTE ";
-                    if (rightRoute.size() == 2) {
-                        // Next is dest
-                        msg += "NULL ";
-                    } else {
-                        // Next is router
-                        for(int i = 0; i < rightRoute.size(); i++) {
-                            if (i != 0 && i!= 1) {
-                                msg += rightRoute.get(i).toString();
-                            }
-                            if (i>1 && i+1 != rightRoute.size()) {
-                                msg += ",";
-                            }
-                        }
-                        msg += " ";
-                    }
-                    msg += cmd.replace("/sendright ", "");
-
-                    String routeTo = Integer.toString(physicalId) + "to" + next;
-
-                    System.out.println("Sending msg => "+msg+" on channel "+routeTo);
-
-                    channel.basicPublish("", routeTo, null, msg.getBytes("UTF-8"));
-                    
+                    // Send to the right with buildSend
+                    buildSendMessage(rRoute, cmd.replaceFirst("/sendright ", Integer.toString(virtualId)+" "));                    
+                } else {
+                    System.out.println("Unknown command.");
                 }
             }
 
             input.close();
 
-            // Command handler will be there
-
-            /*
-                send to left/right neighbour -> Only if part of a ring
-
-            */
         } catch (FileNotFoundException e) {
             System.err.println("The file "+args[0]+" was not found. This node will terminate.");
             System.exit(2);
