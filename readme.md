@@ -1,13 +1,27 @@
 # Ring over Network
 
-A small ring network simulator over a (more simulated) physical network.
+A small ring network simulator over a (even more simulated) physical network.
+Authors : Vincent AUBRIOT and Folajimi OLANIYAN
 
 ## Compile the project
 
 Use the ./compile.sh script to compile the application.
 
+## Clean the project
+
+Use the ./clean.sh script to clean the application.
+
 ## Run the project
 
-A few topologies are provided on the data folder. You can use them to test the application.
+Use the following command: ./run_node.sh id [topology] [rabbitmq_server]
 
-A script that runs the full project will be provided soon. For now, please run the command lines in run_node and adapt them to change the configuration file and/or the physical id for the node you are launching.
+The id parameter gives a physical identifier of your choice to the node.
+Please use a unique identifier between 0 and the number of nodes in the chosen topology.
+
+As of now, there is no id verification to check for duplicates.
+Please avoid giving the same identifier to two nodes, as this may cause problems regarding the routing of the messages.
+
+The topologies and the address of the RabbitMQ server may also be changed upon start.
+By default, the node loads a basic 5-node topology with few physical connections, and uses a local RabbitMQ server.
+
+A few topologies are provided on the data folder. You can use them to test the application.
